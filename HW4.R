@@ -12,16 +12,19 @@ comp$mktcap <- NULL
 
 # prepare the returns data
 crsp.clean$pmonth <- ifelse(crsp.clean$month < 7, crsp.clean$month + 6, crsp.clean$month - 6)
-returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'mktcap', 'RET', 'EXCHCD')]
+returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'lagmktcap', 'RET', 'EXCHCD')]
 names(returns) <- tolower(names(returns))
 
 # merge the accounting and returns data
-compcrsp <- merge(comp, returns, by=c('permno', 'pyear'), all.y=TRUE)
+compcrsp <- merge(comp, returns, by=c('permno', 'pyear'))
 compcrsp <- compcrsp[compcrsp$pyear %in% comp$pyear,]
 compcrsp <- compcrsp[order(compcrsp$permno, compcrsp$pyear, compcrsp$pmonth),]
 
 # accounting variables
 vars <- c('btm', 'roa', 'agr', 'nsi', 'acc')
+
+# take log of net stock issues
+compcrsp$nsi <- log(compcrsp$nsi)
 
 # calculate breakpoints for BTM, ROA, asset growth, net stock issues, and accruals
 compcrsp <- compcrsp[compcrsp$pyear >= 1963,]
@@ -53,12 +56,12 @@ for (var in vars) {
         q5.indices <- compcrsp[var] >= breakpoints[[var]][pyear - min.year + 1, 2]
         q1.comb.indices <- which(date.indices & q1.indices)
         q5.comb.indices <- which(date.indices & q5.indices)
-        q1.weights <- compcrsp$mktcap[q1.comb.indices]
-        q5.weights <- compcrsp$mktcap[q5.comb.indices]
+        q1.weights <- compcrsp$lagmktcap[q1.comb.indices]
+        q5.weights <- compcrsp$lagmktcap[q5.comb.indices]
         q1.returns <- compcrsp$ret[q1.comb.indices]
         q5.returns <- compcrsp$ret[q5.comb.indices]
-        anom[[var]][t,'q1vwret'] <- sum(q1.weights/sum(q1.weights) * q1.returns, na.rm=TRUE)
-        anom[[var]][t,'q5vwret'] <- sum(q5.weights/sum(q5.weights) * q5.returns, na.rm=TRUE)
+        anom[[var]][t,'q1vwret'] <- sum(q1.weights/sum(q1.weights, na.rm=TRUE) * q1.returns, na.rm=TRUE)
+        anom[[var]][t,'q5vwret'] <- sum(q5.weights/sum(q5.weights, na.rm=TRUE) * q5.returns, na.rm=TRUE)
         anom[[var]][t,'q1ewret'] <- mean(q1.returns, na.rm=TRUE)
         anom[[var]][t,'q5ewret'] <- mean(q5.returns, na.rm=TRUE)
         pmonth <- pmonth + 1
