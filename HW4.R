@@ -12,7 +12,7 @@ comp$mktcap <- NULL
 
 # prepare the returns data
 crsp.clean$pmonth <- ifelse(crsp.clean$month < 7, crsp.clean$month + 6, crsp.clean$month - 6)
-returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'lagmktcap', 'RET', 'EXCHCD')]
+returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'mktcap', 'lagmktcap', 'RET', 'EXCHCD')]
 names(returns) <- tolower(names(returns))
 
 # merge the accounting and returns data
@@ -21,7 +21,10 @@ compcrsp <- compcrsp[compcrsp$pyear %in% comp$pyear,]
 compcrsp <- compcrsp[order(compcrsp$permno, compcrsp$pyear, compcrsp$pmonth),]
 
 # accounting variables
-vars <- c('btm', 'roa', 'agr', 'nsi', 'acc')
+vars <- c('btm', 'roa', 'agr', 'nsi', 'acc', 'size')
+
+# rename mktcap to size for size portfolios
+compcrsp$size <- compcrsp$mktcap
 
 # take log of net stock issues
 compcrsp$nsi <- log(compcrsp$nsi)
@@ -40,15 +43,9 @@ for (var in vars) {
 }
 
 calc.anom <- function(anom, compcrsp, var) {
-    pyear <- anom[1]
-    pmonth <- anom[2]
-    q1.bp <- anom[3]
-    q5.bp <- anom[4]
-    date.indices <- compcrsp$pyear == pyear & compcrsp$pmonth == pmonth
-    q1.indices <- compcrsp[var] <= q1.bp
-    q5.indices <- compcrsp[var] >= q5.bp
-    q1.comb.indices <- which(date.indices & q1.indices)
-    q5.comb.indices <- which(date.indices & q5.indices)
+    date.indices <- compcrsp$pyear == anom[1] & compcrsp$pmonth == anom[2]
+    q1.comb.indices <- which(date.indices & compcrsp[var] <= anom[3])
+    q5.comb.indices <- which(date.indices & compcrsp[var] >= anom[4])
     q1.weights <- compcrsp$lagmktcap[q1.comb.indices]
     q5.weights <- compcrsp$lagmktcap[q5.comb.indices]
     q1.returns <- compcrsp$ret[q1.comb.indices]
@@ -118,8 +115,8 @@ for (var in vars) {
     ff.zc.ew[[var]] <- matrix(NaN, length(years), 4)
     colnames(capm.zc.vw[[var]]) <- c('alpha', 'beta')
     colnames(capm.zc.ew[[var]]) <- c('alpha', 'beta')
-    colnames(ff.zc.vw[[var]]) <- c('alpha', 'beta', 'gamma', 'delta')
-    colnames(ff.zc.ew[[var]]) <- c('alpha', 'beta', 'gamma', 'delta')
+    colnames(ff.zc.vw[[var]]) <- c('alpha', 'beta', 'smb', 'hml')
+    colnames(ff.zc.ew[[var]]) <- c('alpha', 'beta', 'smb', 'hml')
     
     for (t in 1:length(years)) {
         rows <- anom.ff$pyear == years[t]
