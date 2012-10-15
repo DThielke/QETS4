@@ -143,5 +143,7 @@ for (var in vars) {
 }
 
 save(anom, file='anom.RData')
+save(capm.zc.vw.summary, file='capm.zc.vw.summary.RData')
+save(capm.zc.ew.summary, file='capm.zc.ew.summary.RData')
 save(ff.zc.vw.summary, file='ff.zc.vw.summary.RData')
 save(ff.zc.ew.summary, file='ff.zc.ew.summary.RData')
