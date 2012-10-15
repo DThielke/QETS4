@@ -115,6 +115,7 @@ for (var in vars) {
     colnames(capm.zc.ew[[var]]) <- c('alpha', 'beta')
     colnames(ff.zc.vw[[var]]) <- c('alpha', 'beta', 'gamma', 'delta')
     colnames(ff.zc.ew[[var]]) <- c('alpha', 'beta', 'gamma', 'delta')
+    
     for (t in 1:length(years)) {
         rows <- anom.ff[,'pyear'] == years[t]
         y.vw <- anom.ff[rows, 'zcvwret']
