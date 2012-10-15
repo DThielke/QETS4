@@ -39,41 +39,43 @@ for (var in vars) {
     }
 }
 
+calc.anom <- function(anom, compcrsp, var) {
+    pyear <- anom[1]
+    pmonth <- anom[2]
+    q1.bp <- anom[3]
+    q5.bp <- anom[4]
+    date.indices <- compcrsp$pyear == pyear & compcrsp$pmonth == pmonth
+    q1.indices <- compcrsp[var] <= q1.bp
+    q5.indices <- compcrsp[var] >= q5.bp
+    q1.comb.indices <- which(date.indices & q1.indices)
+    q5.comb.indices <- which(date.indices & q5.indices)
+    q1.weights <- compcrsp$lagmktcap[q1.comb.indices]
+    q5.weights <- compcrsp$lagmktcap[q5.comb.indices]
+    q1.returns <- compcrsp$ret[q1.comb.indices]
+    q5.returns <- compcrsp$ret[q5.comb.indices]
+    q1vwret <- sum(q1.weights/sum(q1.weights, na.rm=TRUE) * q1.returns, na.rm=TRUE)
+    q5vwret <- sum(q5.weights/sum(q5.weights, na.rm=TRUE) * q5.returns, na.rm=TRUE)
+    q1ewret <- mean(q1.returns, na.rm=TRUE)
+    q5ewret <- mean(q5.returns, na.rm=TRUE)
+    return(c(q1vwret=q1vwret, q5vwret=q5vwret, q1ewret=q1ewret, q5ewret=q5ewret))
+}
+
 # calculate the value-weighted and equally-weighted portfolio returns for each accounting variable
 nmonth <- 12 * (max(years) - min(years)) + tail(compcrsp$pmonth, 1)
 anom <- list()
 for (var in vars) {
-    anom[[var]] <- matrix(0, nmonth, 10)
-    anom[[var]][,1] <- head(rep(years, each=12), nmonth) # pyear
-    anom[[var]][,2] <- head(rep(1:12, times=length(years)), nmonth) # pmonth
-    colnames(anom[[var]]) <- c('pyear', 'pmonth', 'year', 'month', 'q1vwret', 'q5vwret', 'q1ewret', 'q5ewret', 'zcvwret', 'zcewret')
+    anom[[var]] <- data.frame(pyear=head(rep(years, each=12), nmonth), 
+                              pmonth=head(rep(1:12, times=length(years)), nmonth))
     min.year <- min(years)
     pyear <- min.year
     pmonth <- 1
-    for (t in 1:nmonth) {
-        date.indices <- compcrsp$pyear == pyear & compcrsp$pmonth == pmonth
-        q1.indices <- compcrsp[var] <= breakpoints[[var]][pyear - min.year + 1, 1]
-        q5.indices <- compcrsp[var] >= breakpoints[[var]][pyear - min.year + 1, 2]
-        q1.comb.indices <- which(date.indices & q1.indices)
-        q5.comb.indices <- which(date.indices & q5.indices)
-        q1.weights <- compcrsp$lagmktcap[q1.comb.indices]
-        q5.weights <- compcrsp$lagmktcap[q5.comb.indices]
-        q1.returns <- compcrsp$ret[q1.comb.indices]
-        q5.returns <- compcrsp$ret[q5.comb.indices]
-        anom[[var]][t,'q1vwret'] <- sum(q1.weights/sum(q1.weights, na.rm=TRUE) * q1.returns, na.rm=TRUE)
-        anom[[var]][t,'q5vwret'] <- sum(q5.weights/sum(q5.weights, na.rm=TRUE) * q5.returns, na.rm=TRUE)
-        anom[[var]][t,'q1ewret'] <- mean(q1.returns, na.rm=TRUE)
-        anom[[var]][t,'q5ewret'] <- mean(q5.returns, na.rm=TRUE)
-        pmonth <- pmonth + 1
-        if (pmonth > 12) {
-            pmonth <- 1
-            pyear <- pyear + 1
-        }
-    }
-    anom[[var]][,'zcvwret'] <- anom[[var]][,'q5vwret'] - anom[[var]][,'q1vwret']
-    anom[[var]][,'zcewret'] <- anom[[var]][,'q5ewret'] - anom[[var]][,'q1ewret']
-    anom[[var]][,'year'] <- ifelse(anom[[var]][,'pmonth'] > 6, anom[[var]][,'pyear'] + 1, anom[[var]][,'pyear'])
-    anom[[var]][,'month'] <- ifelse(anom[[var]][,'pmonth'] > 6, anom[[var]][,'pmonth'] - 6, anom[[var]][,'pmonth'] + 6)
+    anom[[var]]$q1.bp <- breakpoints[[var]][anom[[var]]$pyear - min.year + 1, 1]
+    anom[[var]]$q5.bp <- breakpoints[[var]][anom[[var]]$pyear - min.year + 1, 2]
+    anom[[var]] <- cbind(anom[[var]], t(apply(anom[[var]], 1, calc.anom, compcrsp, var)))
+    anom[[var]]$zcvwret <- anom[[var]]$q5vwret - anom[[var]]$q1vwret
+    anom[[var]]$zcewret <- anom[[var]]$q5ewret - anom[[var]]$q1ewret
+    anom[[var]]$year <- ifelse(anom[[var]]$pmonth > 6, anom[[var]]$pyear + 1, anom[[var]]$pyear)
+    anom[[var]]$month <- ifelse(anom[[var]]$pmonth > 6, anom[[var]]$pmonth - 6, anom[[var]]$pmonth + 6)
 }
 
 # load the Fama-French factor data
@@ -120,9 +122,9 @@ for (var in vars) {
     colnames(ff.zc.ew[[var]]) <- c('alpha', 'beta', 'gamma', 'delta')
     
     for (t in 1:length(years)) {
-        rows <- anom.ff[,'pyear'] == years[t]
-        y.vw <- anom.ff[rows, 'zcvwret']
-        y.ew <- anom.ff[rows, 'zcewret']
+        rows <- anom.ff$pyear == years[t]
+        y.vw <- anom.ff$zcvwret[rows]
+        y.ew <- anom.ff$zcewret[rows]
         x.capm <- cbind(rep(1, length(y.vw)), anom.ff$EXMKT[rows] / 100)
         x.ff <- cbind(rep(1, length(y.vw)),
                    anom.ff$EXMKT[rows] / 100,
