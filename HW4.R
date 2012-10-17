@@ -12,33 +12,54 @@ comp$mktcap <- NULL
 
 # prepare the returns data
 crsp.clean$pmonth <- ifelse(crsp.clean$month < 7, crsp.clean$month + 6, crsp.clean$month - 6)
-returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'mktcap', 'lagmktcap', 'RET', 'EXCHCD')]
+returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'mktcap', 'lagmktcap', 'momentum', 'reversal', 'RET', 'EXCHCD')]
 names(returns) <- tolower(names(returns))
 
 # merge the accounting and returns data
-compcrsp <- merge(comp, returns, by=c('permno', 'pyear'))
+compcrsp <- merge(comp, returns, by=c('permno', 'pyear'), all.y=TRUE)
 compcrsp <- compcrsp[compcrsp$pyear %in% comp$pyear,]
 compcrsp <- compcrsp[order(compcrsp$permno, compcrsp$pyear, compcrsp$pmonth),]
 
 # accounting variables
-vars <- c('btm', 'roa', 'agr', 'nsi', 'acc', 'size')
+vars <- c('btm', 'roa', 'agr', 'nsi', 'acc', 'size', 'mom', 'rev')
+annual <- c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE)
 
-# rename mktcap to size for size portfolios
+# rename size, mom, rev
 compcrsp$size <- compcrsp$mktcap
+compcrsp$mom <- compcrsp$momentum
+compcrsp$rev <- compcrsp$reversal
+compcrsp$mktcap <- NULL
+compcrsp$momentum <- NULL
+compcrsp$reversal <- NULL
 
 # take log of net stock issues
 compcrsp$nsi <- log(compcrsp$nsi)
 
-# calculate breakpoints for BTM, ROA, asset growth, net stock issues, and accruals
+calc.breakpoints <- function(breakpoints, compcrsp, var, probabilities, annual) {
+    if (annual) {
+        return(quantile(compcrsp[compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1, var], probabilities, na.rm=TRUE))
+    } else {
+        return(quantile(compcrsp[compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2], var], probabilities, na.rm=TRUE))
+    }
+}
+
+# calculate breakpoints for BTM, ROA, asset growth, net stock issues, accruals, size, momentum and reversals
 compcrsp <- compcrsp[compcrsp$pyear >= 1963,]
 years <- min(compcrsp$pyear):max(compcrsp$pyear)
-probabilities <- c(0.2, 0.8)
+min.year <- min(years)
 breakpoints <- list()
-for (var in vars) {
-    breakpoints[[var]] <- matrix(0, length(years), 4)
-    for (t in 1:length(years)) {
-        indices <- compcrsp$exchcd == 1 & compcrsp$pyear == years[t] & compcrsp$pmonth == 1
-        breakpoints[[var]][t,] <- quantile(compcrsp[indices, var], probabilities, na.rm=TRUE)
+for (i in 1:length(vars)) {
+    var <- vars[i]
+    if (annual[i]) {
+        breakpoints[[var]] <- data.frame(pyear=years)
+        quantiles <- t(apply(breakpoints[[var]], 1, calc.breakpoints, compcrsp, var, c(0.2, 0.8), TRUE))
+        colnames(quantiles) <- c('q1.bp', 'q5.bp')
+        breakpoints[[var]] <- cbind(breakpoints[[var]], quantiles)
+    } else {
+        breakpoints[[var]] <- expand.grid(pyear=years, pmonth=1:12)
+        quantiles <- t(apply(breakpoints[[var]], 1, calc.breakpoints, compcrsp, var, c(0.2, 0.8), FALSE))
+        colnames(quantiles) <- c('q1.bp', 'q5.bp')
+        breakpoints[[var]] <- cbind(breakpoints[[var]], quantiles)
     }
 }
 
@@ -60,14 +81,20 @@ calc.anom <- function(anom, compcrsp, var) {
 # calculate the value-weighted and equally-weighted portfolio returns for each accounting variable
 nmonth <- 12 * (max(years) - min(years)) + tail(compcrsp$pmonth, 1)
 anom <- list()
-for (var in vars) {
+for (i in 1:length(vars)) {
+    var <- vars[i]
+    print(var)
+    
     anom[[var]] <- data.frame(pyear=head(rep(years, each=12), nmonth), 
                               pmonth=head(rep(1:12, times=length(years)), nmonth))
-    min.year <- min(years)
-    pyear <- min.year
-    pmonth <- 1
-    anom[[var]]$q1.bp <- breakpoints[[var]][anom[[var]]$pyear - min.year + 1, 1]
-    anom[[var]]$q5.bp <- breakpoints[[var]][anom[[var]]$pyear - min.year + 1, 2]
+    
+    if (annual[i]) {
+        anom[[var]] <- merge(anom[[var]], breakpoints[[var]], by=c('pyear'))
+    } else {
+        anom[[var]] <- merge(anom[[var]], breakpoints[[var]], by=c('pyear', 'pmonth'))
+    }
+    
+    anom[[var]] <- anom[[var]][order(anom[[var]]$pyear, anom[[var]]$pmonth),]    
     anom[[var]] <- cbind(anom[[var]], t(apply(anom[[var]], 1, calc.anom, compcrsp, var)))
     anom[[var]]$zcvwret <- anom[[var]]$q5vwret - anom[[var]]$q1vwret
     anom[[var]]$zcewret <- anom[[var]]$q5ewret - anom[[var]]$q1ewret
