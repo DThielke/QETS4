@@ -37,9 +37,11 @@ compcrsp$nsi <- log(compcrsp$nsi)
 
 calc.breakpoints <- function(breakpoints, compcrsp, var, probabilities, annual) {
     if (annual) {
-        return(quantile(compcrsp[compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1, var], probabilities, na.rm=TRUE))
+        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1
+        return(quantile(rows, var], probabilities, na.rm=TRUE))
     } else {
-        return(quantile(compcrsp[compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2], var], probabilities, na.rm=TRUE))
+        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2]
+        return(quantile(compcrsp[rows, var], probabilities, na.rm=TRUE))
     }
 }
 
@@ -85,21 +87,23 @@ for (i in 1:length(vars)) {
     var <- vars[i]
     print(var)
     
-    anom[[var]] <- data.frame(pyear=head(rep(years, each=12), nmonth), 
-                              pmonth=head(rep(1:12, times=length(years)), nmonth))
+    anom.var <- data.frame(pyear=head(rep(years, each=12), nmonth), 
+                           pmonth=head(rep(1:12, times=length(years)), nmonth))
     
     if (annual[i]) {
-        anom[[var]] <- merge(anom[[var]], breakpoints[[var]], by=c('pyear'))
+        anom.var <- merge(anom.var, breakpoints[[var]], by=c('pyear'))
     } else {
-        anom[[var]] <- merge(anom[[var]], breakpoints[[var]], by=c('pyear', 'pmonth'))
+        anom.var <- merge(anom.var, breakpoints[[var]], by=c('pyear', 'pmonth'))
     }
     
-    anom[[var]] <- anom[[var]][order(anom[[var]]$pyear, anom[[var]]$pmonth),]    
-    anom[[var]] <- cbind(anom[[var]], t(apply(anom[[var]], 1, calc.anom, compcrsp, var)))
-    anom[[var]]$zcvwret <- anom[[var]]$q5vwret - anom[[var]]$q1vwret
-    anom[[var]]$zcewret <- anom[[var]]$q5ewret - anom[[var]]$q1ewret
-    anom[[var]]$year <- ifelse(anom[[var]]$pmonth > 6, anom[[var]]$pyear + 1, anom[[var]]$pyear)
-    anom[[var]]$month <- ifelse(anom[[var]]$pmonth > 6, anom[[var]]$pmonth - 6, anom[[var]]$pmonth + 6)
+    anom.var <- anom.var[order(anom.var$pyear, anom.var$pmonth),]    
+    anom.var <- cbind(anom.var, t(apply(anom.var, 1, calc.anom, compcrsp, var)))
+    anom.var$zcvwret <- anom.var$q5vwret - anom.var$q1vwret
+    anom.var$zcewret <- anom.var$q5ewret - anom.var$q1ewret
+    anom.var$year <- ifelse(anom.var$pmonth > 6, anom.var$pyear + 1, anom.var$pyear)
+    anom.var$month <- ifelse(anom.var$pmonth > 6, anom.var$pmonth - 6, anom.var$pmonth + 6)
+    
+    anom[[var]] <- anom.var
 }
 
 # load the Fama-French factor data
@@ -109,6 +113,7 @@ factors <- read.csv("data/F-F_Research_Data_Factors.csv", header=TRUE)
 factors$year <- as.numeric(substr(as.character(factors$date), 1, 4))
 factors$month <- as.numeric(substr(as.character(factors$date), 5, 6))
 factors <- subset(factors, select=c("year", "month", "EXMKT", "SMB", "HML", "RF"))
+# calculate pyear and pmonth
 factors$pyear <- ifelse(factors$month < 7, factors$year - 1, factors$year)
 factors$pmonth <- ifelse(factors$month < 7, factors$month + 6, factors$month - 6)
 
