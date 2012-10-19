@@ -38,7 +38,7 @@ compcrsp$nsi <- log(compcrsp$nsi)
 calc.breakpoints <- function(breakpoints, compcrsp, var, probabilities, annual) {
     if (annual) {
         rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1
-        return(quantile(rows, var], probabilities, na.rm=TRUE))
+        return(quantile(compcrsp[rows, var], probabilities, na.rm=TRUE))
     } else {
         rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2]
         return(quantile(compcrsp[rows, var], probabilities, na.rm=TRUE))
