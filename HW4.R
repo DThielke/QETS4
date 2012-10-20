@@ -120,12 +120,10 @@ factors$pmonth <- ifelse(factors$month < 7, factors$month + 6, factors$month - 6
 # initialize arrays for the annual coefficient estimates
 capm.zc.vw <- list()
 capm.zc.ew <- list()
-capm.zc.vw.summary <- list()
-capm.zc.ew.summary <- list()
 ff.zc.vw <- list()
 ff.zc.ew <- list()
-ff.zc.vw.summary <- list()
-ff.zc.ew.summary <- list()
+capm <- list()
+ff <- list()
 
 summary.stats <- function(x) {
     results <- matrix(0, 4, ncol(x))
@@ -145,10 +143,10 @@ for (var in vars) {
     capm.zc.ew[[var]] <- matrix(NaN, length(years), 2)
     ff.zc.vw[[var]] <- matrix(NaN, length(years), 4)
     ff.zc.ew[[var]] <- matrix(NaN, length(years), 4)
-    colnames(capm.zc.vw[[var]]) <- c('alpha', 'beta')
-    colnames(capm.zc.ew[[var]]) <- c('alpha', 'beta')
-    colnames(ff.zc.vw[[var]]) <- c('alpha', 'beta', 'smb', 'hml')
-    colnames(ff.zc.ew[[var]]) <- c('alpha', 'beta', 'smb', 'hml')
+    colnames(capm.zc.vw[[var]]) <- c('vw.alpha', 'vw.beta')
+    colnames(capm.zc.ew[[var]]) <- c('ew.alpha', 'ew.beta')
+    colnames(ff.zc.vw[[var]]) <- c('vw.alpha', 'vw.beta', 'vw.smb', 'vw.hml')
+    colnames(ff.zc.ew[[var]]) <- c('ew.alpha', 'ew.beta', 'ew.smb', 'ew.hml')
     
     for (t in 1:length(years)) {
         rows <- anom.ff$pyear == years[t]
@@ -165,14 +163,10 @@ for (var in vars) {
         ff.zc.ew[[var]][t,] <- solve(t(x.ff) %*% x.ff, t(x.ff) %*% y.ew)
     }
     
-    capm.zc.vw.summary[[var]] <- summary.stats(capm.zc.vw[[var]])
-    capm.zc.ew.summary[[var]] <- summary.stats(capm.zc.ew[[var]])
-    ff.zc.vw.summary[[var]] <- summary.stats(ff.zc.vw[[var]])
-    ff.zc.ew.summary[[var]] <- summary.stats(ff.zc.ew[[var]])
+    capm[[var]] <- cbind(summary.stats(capm.zc.vw[[var]]), summary.stats(capm.zc.ew[[var]]))
+    ff[[var]] <- cbind(summary.stats(ff.zc.vw[[var]]), summary.stats(ff.zc.ew[[var]]))
 }
 
 save(anom, file='anom.RData')
-save(capm.zc.vw.summary, file='capm.zc.vw.summary.RData')
-save(capm.zc.ew.summary, file='capm.zc.ew.summary.RData')
-save(ff.zc.vw.summary, file='ff.zc.vw.summary.RData')
-save(ff.zc.ew.summary, file='ff.zc.ew.summary.RData')
+save(capm, file='capm.RData')
+save(ff, file='ff.RData')
