@@ -3,6 +3,7 @@
 # load the data
 load('data/comp.RData')
 load('data/smr.Rdata')
+load('data/size.Rdata')
 
 # calculate pyear for accounting data
 comp$pyear <- comp$year + 1
@@ -12,8 +13,14 @@ comp$mktcap <- NULL
 
 # prepare the returns data
 crsp.clean$pmonth <- ifelse(crsp.clean$month < 7, crsp.clean$month + 6, crsp.clean$month - 6)
-returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'mktcap', 'lagmktcap', 'momentum', 'reversal', 'RET', 'EXCHCD')]
+returns <- crsp.clean[, c('PERMNO', 'pyear', 'pmonth', 'year', 'month', 'mktcap', 'lagmktcap', 'momentum', 'reversal', 'RET', 'EXCHCD')]
 names(returns) <- tolower(names(returns))
+returns$size <- returns$mktcap
+returns$mom <- returns$momentum
+returns$rev <- returns$reversal
+returns$mktcap <- NULL
+returns$momentum <- NULL
+returns$reversal <- NULL
 
 # merge the accounting and returns data
 compcrsp <- merge(comp, returns, by=c('permno', 'pyear'), all.y=TRUE)
@@ -24,23 +31,18 @@ compcrsp <- compcrsp[order(compcrsp$permno, compcrsp$pyear, compcrsp$pmonth),]
 vars <- c('btm', 'roa', 'agr', 'nsi', 'acc', 'size', 'mom', 'rev')
 annual <- c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE)
 
-# rename size, mom, rev
-compcrsp$size <- compcrsp$mktcap
-compcrsp$mom <- compcrsp$momentum
-compcrsp$rev <- compcrsp$reversal
-compcrsp$mktcap <- NULL
-compcrsp$momentum <- NULL
-compcrsp$reversal <- NULL
-
 # take log of net stock issues
 compcrsp$nsi <- log(compcrsp$nsi)
 
-calc.breakpoints <- function(breakpoints, compcrsp, var, probabilities, annual) {
-    if (annual) {
-        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1
+calc.breakpoints <- function(breakpoints, compcrsp, var, probabilities) {
+    if (var == 'size') {
+        rows <- size$EXCHCD==1 & size$pyear==breakpoints[1]
+        return(quantile(size$mktcap[rows], probabilities, na.rm=TRUE))
+    } else if (var == 'mom' | var == 'rev') {
+        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2]
         return(quantile(compcrsp[rows, var], probabilities, na.rm=TRUE))
     } else {
-        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==breakpoints[2]
+        rows <- compcrsp$exchcd==1 & compcrsp$pyear==breakpoints[1] & compcrsp$pmonth==1
         return(quantile(compcrsp[rows, var], probabilities, na.rm=TRUE))
     }
 }
@@ -53,16 +55,13 @@ breakpoints <- list()
 for (i in 1:length(vars)) {
     var <- vars[i]
     if (annual[i]) {
-        breakpoints[[var]] <- data.frame(pyear=years)
-        quantiles <- t(apply(breakpoints[[var]], 1, calc.breakpoints, compcrsp, var, c(0.2, 0.8), TRUE))
-        colnames(quantiles) <- c('q1.bp', 'q5.bp')
-        breakpoints[[var]] <- cbind(breakpoints[[var]], quantiles)
+        breakpoints[[var]] <- data.frame(pyear=years)    
     } else {
         breakpoints[[var]] <- expand.grid(pyear=years, pmonth=1:12)
-        quantiles <- t(apply(breakpoints[[var]], 1, calc.breakpoints, compcrsp, var, c(0.2, 0.8), FALSE))
-        colnames(quantiles) <- c('q1.bp', 'q5.bp')
-        breakpoints[[var]] <- cbind(breakpoints[[var]], quantiles)
     }
+    quantiles <- t(apply(breakpoints[[var]], 1, calc.breakpoints, compcrsp, var, c(0.2, 0.8)))
+    colnames(quantiles) <- c('q1.bp', 'q5.bp')
+    breakpoints[[var]] <- cbind(breakpoints[[var]], quantiles)
 }
 
 calc.anom <- function(anom, compcrsp, var) {
